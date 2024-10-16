@@ -14,8 +14,9 @@
 #define BLUE_LED 1 // PortD Pin 1
 #define BAUD_RATE 9600
 
-volatile uint8_t receive_data;
+volatile uint8_t receive_data = 0;
 volatile uint8_t ISR_error = 0;
+volatile uint8_t count = 0;
 
 
 void Init_UART2() {
@@ -37,17 +38,22 @@ void Init_UART2() {
   UART2->C1 = UART2->S2 = UART2->C3 = 0;
   // Enable transmitter and receiver
   UART2->C2 = UART_C2_TE_MASK | UART_C2_RE_MASK;
-	/*	
-	NVIC_SetPriority(UART2_IRQn, 128); 
-	NVIC_ClearPendingIRQ(UART2_IRQn); 
+	
+count++;	
+	NVIC_SetPriority(UART2_IRQn, 128);
+count++;	
+	NVIC_ClearPendingIRQ(UART2_IRQn);
+count++;	
 	NVIC_EnableIRQ(UART2_IRQn);
-	UART2->C2 |= UART_C2_TIE_MASK | UART_C2_RIE_MASK;
+	count++;
+	count++;
 	UART2->C2 |= UART_C2_RIE_MASK;
-	*/
+	count++;
+	
 	
 }
 
-/*
+
 void UART2_IRQHandler(void) {
 	NVIC_ClearPendingIRQ(UART2_IRQn);
 	if (UART2->S1 & UART_S1_RDRF_MASK) {
@@ -60,9 +66,10 @@ void UART2_IRQHandler(void) {
 											//Handle error
 											ISR_error = 1;
 											
-										}
+										} 
+										
 }
-*/
+
 
 void UART2_Transmit_Poll(uint8_t data) {
   // wait until transmit data register is empty
@@ -74,8 +81,7 @@ uint8_t UART2_Receive_Poll(void) {
   // wait until receive data register is full
   while (!(UART2->S1 & UART_S1_RDRF_MASK))
   ;
-	receive_data = UART2->D;
-  return receive_data;
+  return UART2->D;
 }
 
 static void delay(volatile uint32_t nof) {
@@ -118,14 +124,15 @@ int main()
 	//TPM1_C0V = 7500;
 	//TPM1_C1V = 7500;
 	
-	/*	osKernelInitialize();	// Initialize CMSIS-RTOS
+	/*
+	osKernelInitialize();	// Initialize CMSIS-RTOS
   osThreadNew(ledOn , NULL, NULL);    // Create application main thread
-  osKernelStart(); 
+  osKernelStart();
 	*/
-  
+	
   while(1)
   {
-    rx_data = UART2_Receive_Poll();
-    ESP_response(rx_data);
+    //rx_data = UART2_Receive_Poll();
+    ESP_response(receive_data);
   }
 }
