@@ -10,6 +10,8 @@
 
 volatile uint8_t ISR_error;
 
+/* Initialise LED for GPIO Pins
+*/
 void initLED(){
   SIM->SCGC5 |= ((SIM_SCGC5_PORTB_MASK) | (SIM_SCGC5_PORTD_MASK));
   // Configure MUX settings to make all 3 pins GPIO
@@ -30,6 +32,7 @@ void initLED(){
   PTB->PDOR |= MASK(RED_LED);
   PTB->PDOR |= MASK(GREEN_LED);
 }
+
 void LED_Turn_On(void) {
 	PTB->PDOR &= ~MASK(RED_LED);
 }
@@ -37,11 +40,12 @@ void LED_Turn_On(void) {
 void LED_Turn_Off(void) {
   PTB->PDOR |= MASK(RED_LED);
 }
+
 void ledOn(void *argument) {
-	for(;;) {
-		if(ISR_error == 1){
-		LED_Turn_On();
-		osDelay(2000);
-		}
-	}
+  for(;;){
+		  LED_Turn_On();
+		  osDelay(2000);
+      LED_Turn_Off();
+      osDelay(2000);
+  }
 }
