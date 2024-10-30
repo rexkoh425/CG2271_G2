@@ -15,11 +15,50 @@
 #define BAUD_RATE 9600
 #define PTE23_Pin 23 //RX
 
+osThreadId_t esp_id;
 volatile uint8_t receive_data = 0;
 volatile uint8_t ISR_error = 0;
 volatile uint8_t running_state = 0;
+volatile uint8_t ending = 0;
 uint8_t isFrontLEDOn = 0;
 
+// Define notes as frequencies in Hz
+#define NOTE_E5  659
+#define NOTE_D5  587
+#define NOTE_FS4 370
+#define NOTE_GS4 415
+#define NOTE_C5  523
+#define NOTE_B4  494
+#define NOTE_D4  294
+#define NOTE_E4  330
+
+// Define note durations in ms
+#define WHOLE_NOTE 500
+#define HALF_NOTE (WHOLE_NOTE / 2)
+#define QUARTER_NOTE (WHOLE_NOTE / 4)
+#define EIGHTH_NOTE (WHOLE_NOTE / 8)
+
+void playEndingTone() {
+    setBuzzerFrequency(NOTE_E5); osDelay(QUARTER_NOTE); setBuzzerFrequency(0); osDelay(EIGHTH_NOTE);
+    setBuzzerFrequency(NOTE_D5); osDelay(QUARTER_NOTE); setBuzzerFrequency(0); osDelay(EIGHTH_NOTE);
+    setBuzzerFrequency(NOTE_FS4); osDelay(QUARTER_NOTE); setBuzzerFrequency(0); osDelay(EIGHTH_NOTE);
+    setBuzzerFrequency(NOTE_GS4); osDelay(HALF_NOTE); setBuzzerFrequency(0); osDelay(EIGHTH_NOTE);
+
+    setBuzzerFrequency(NOTE_C5); osDelay(QUARTER_NOTE); setBuzzerFrequency(0); osDelay(EIGHTH_NOTE);
+    setBuzzerFrequency(NOTE_B4); osDelay(QUARTER_NOTE); setBuzzerFrequency(0); osDelay(EIGHTH_NOTE);
+    setBuzzerFrequency(NOTE_D4); osDelay(QUARTER_NOTE); setBuzzerFrequency(0); osDelay(EIGHTH_NOTE);
+    setBuzzerFrequency(NOTE_E4); osDelay(HALF_NOTE); setBuzzerFrequency(0); osDelay(EIGHTH_NOTE);
+
+    setBuzzerFrequency(NOTE_E5); osDelay(QUARTER_NOTE); setBuzzerFrequency(0); osDelay(EIGHTH_NOTE);
+    setBuzzerFrequency(NOTE_D5); osDelay(QUARTER_NOTE); setBuzzerFrequency(0); osDelay(EIGHTH_NOTE);
+    setBuzzerFrequency(NOTE_FS4); osDelay(QUARTER_NOTE); setBuzzerFrequency(0); osDelay(EIGHTH_NOTE);
+    setBuzzerFrequency(NOTE_GS4); osDelay(HALF_NOTE); setBuzzerFrequency(0); osDelay(EIGHTH_NOTE);
+
+    setBuzzerFrequency(NOTE_C5); osDelay(QUARTER_NOTE); setBuzzerFrequency(0); osDelay(EIGHTH_NOTE);
+    setBuzzerFrequency(NOTE_E4); osDelay(QUARTER_NOTE); setBuzzerFrequency(0); osDelay(EIGHTH_NOTE);
+    setBuzzerFrequency(NOTE_B4); osDelay(QUARTER_NOTE); setBuzzerFrequency(0); osDelay(EIGHTH_NOTE);
+    setBuzzerFrequency(NOTE_GS4); osDelay(HALF_NOTE); setBuzzerFrequency(0); osDelay(HALF_NOTE);
+}
 
 void Init_UART2() {
 	uint32_t divisor,bus_clock;
@@ -53,6 +92,7 @@ void UART2_IRQHandler(void) {
 	NVIC_ClearPendingIRQ(UART2_IRQn);
 	if (UART2->S1 & UART_S1_RDRF_MASK) {
 		receive_data = UART2->D;
+		osThreadFlagsSet(esp_id , 0x0001);
 	}
 	if (UART2->S1 &  (UART_S1_OR_MASK |
 										UART_S1_NF_MASK |
@@ -72,43 +112,88 @@ static void delay(volatile uint32_t nof) {
   }
 }
 
+// 0x3n -> motor direction
+// 0x1n -> motor speed
+// 0x9n -> buzzer tone
 void ESP_response(uint8_t rx_data){
 	switch(rx_data) {
+		case 0x11:
+			motor_speed = 1;
+		  break;
+		case 0x12:
+			motor_speed = 0.5;
+		  break;
 		case 0x31:
 			running_state = 1;
+			ending = 0;
 			goLeft();
 		  break;
 		case 0x32:
 			running_state = 1;
+			ending = 0;
 			goRight();
 		  break;
 		case 0x33:
 			running_state = 1;
+			ending = 0;
 			goForward();
 		  break;
 		case 0x34:
 			running_state = 1;
+			ending = 0;
 			goBackward();
 		  break;
+		case 0x35:
+			running_state = 1;
+			ending = 0;
+			moveLeftForward();
+		  break;
+		case 0x36:
+			running_state = 1;
+			ending = 0;
+			moveRightForward();
+		  break;
+		case 0x37:
+			running_state = 1;
+			ending = 0;
+			moveLeftBackward();
+		  break;
+		case 0x38:
+			running_state = 1;
+			ending = 0;
+			moveRightBackward();
+		  break;
+		case 0x98:
+			ending = 0;
+			break;
+		case 0x99:
+			ending = 1;
+	    break;
 		default:
 			running_state = 0;
 			stop();
+			ending = 0;
 		  break;
 	}
 }
 
 void ESPresponse(void *argument) {
 	for(;;) {
+		osThreadFlagsWait(0x0001 , osFlagsWaitAny , osWaitForever);
 		ESP_response(receive_data);
 	}
 }
 
 void playMusic(void *argument){
     for(;;){
-        setBuzzerFrequency(WEE_FREQUENCY);
-        osDelay(500);
-        setBuzzerFrequency(WOO_FREQUENCY);
-        osDelay(500);
+				if(ending == 0){
+					setBuzzerFrequency(WEE_FREQUENCY);
+					osDelay(500);
+					setBuzzerFrequency(WOO_FREQUENCY);
+					osDelay(500);
+				}else{
+					playEndingTone();
+				}
     }
 }
 
@@ -117,34 +202,42 @@ void playMusic(void *argument){
 void ledFront(void *argument){
     for(;;){
         if(running_state == 1){
-			isFrontLEDOn = 1;
+						isFrontLEDOn = 0;
+						PTE->PDOR &= ~MASK(PTE2_Pin);
+						PTE->PDOR &= ~MASK(PTE3_Pin);
+						PTE->PDOR &= ~MASK(PTE4_Pin);
+						PTE->PDOR &= ~MASK(PTE5_Pin);
+						PTB->PDOR &= ~MASK(PTB8_Pin);
+						PTB->PDOR &= ~MASK(PTB9_Pin);
+						PTB->PDOR &= ~MASK(PTB10_Pin);
+						PTB->PDOR &= ~MASK(PTB11_Pin);
+					
             PTE->PDOR |= MASK(PTE5_Pin);
-            PTE->PDOR &= ~MASK(PTE5_Pin);
             osDelay(100);
+						PTE->PDOR &= ~MASK(PTE5_Pin);
             PTE->PDOR |= MASK(PTE4_Pin);
-            PTE->PDOR &= ~MASK(PTE4_Pin);
             osDelay(100);
+						PTE->PDOR &= ~MASK(PTE4_Pin);
             PTE->PDOR |= MASK(PTE3_Pin);
-            PTE->PDOR &= ~MASK(PTE3_Pin);
             osDelay(100);
+						PTE->PDOR &= ~MASK(PTE3_Pin);
             PTE->PDOR |= MASK(PTE2_Pin);
-            PTE->PDOR &= ~MASK(PTE2_Pin);
             osDelay(100);
+						PTE->PDOR &= ~MASK(PTE2_Pin);
             PTB->PDOR |= MASK(PTB11_Pin);
-            PTB->PDOR &= ~MASK(PTB11_Pin);
             osDelay(100);
+					  PTB->PDOR &= ~MASK(PTB11_Pin);
             PTB->PDOR |= MASK(PTB10_Pin);
-            PTB->PDOR &= ~MASK(PTB10_Pin);
             osDelay(100);
+						PTB->PDOR &= ~MASK(PTB10_Pin);
             PTB->PDOR |= MASK(PTB9_Pin);
-            PTB->PDOR &= ~MASK(PTB9_Pin);
             osDelay(100);
+						PTB->PDOR &= ~MASK(PTB9_Pin);
             PTB->PDOR |= MASK(PTB8_Pin);
-            PTB->PDOR &= ~MASK(PTB8_Pin);
             osDelay(100);
-        } else {
-			if(!isFrontLEDOn){
-				PTE->PDOR |= MASK(PTE5_Pin);
+						PTB->PDOR &= ~MASK(PTB8_Pin);
+        } else if(!isFrontLEDOn){
+							PTE->PDOR |= MASK(PTE5_Pin);
             	PTE->PDOR |= MASK(PTE4_Pin);
             	PTE->PDOR |= MASK(PTE3_Pin);
             	PTE->PDOR |= MASK(PTE2_Pin);
@@ -152,9 +245,8 @@ void ledFront(void *argument){
             	PTB->PDOR |= MASK(PTB10_Pin);
             	PTB->PDOR |= MASK(PTB9_Pin);
             	PTB->PDOR |= MASK(PTB8_Pin);
-				isFrontLEDOn = 1;
+							isFrontLEDOn = 1;
 			}
-        }
     }
 }
 
@@ -186,8 +278,11 @@ int main()
 	
 	
 	osKernelInitialize();	// Initialize CMSIS-RTOS
-  	//osThreadNew(ledOn , NULL, NULL);    // Create application main thread
-	osThreadNew(ESPresponse, NULL, NULL); // Thread to run motors
+  //osThreadNew(ledOn , NULL, NULL);    // Create application main thread
+  osThreadAttr_t thread_attr = {
+			.priority = osPriorityHigh
+	};
+	esp_id = osThreadNew(ESPresponse, NULL, &thread_attr); // Thread to run motors
 	osThreadNew(playMusic, NULL, NULL); // Thread to play music
 	osThreadNew(ledFront, NULL, NULL); // Thread to run front LEDs
 	osThreadNew(ledBack, NULL, NULL); // Thread to run back LEDs
