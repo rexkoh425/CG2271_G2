@@ -95,9 +95,17 @@ void loop() {
     response = "MOVING RIGHT BACKWARD";
     Serial2.write(0x38);
   }
+  else if (message == "9") {
+    response = "TURNING LEFT FULL";
+    Serial2.write(0x39);
+  }
+  else if (message == "k") {
+    response = "TURNING RIGHT FULL";
+    Serial2.write(0x3a);
+  }
   else if (message == "0") {
     response = "STOPPING";
-    Serial2.write(0x39);
+    Serial2.write(0x3b);
   }
   else if (message == "f") {
     response = "FULL SPEED";
