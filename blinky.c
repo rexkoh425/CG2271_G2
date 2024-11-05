@@ -222,6 +222,16 @@ void ESP_response(uint8_t rx_data){
 			ending = 0;
 			moveRightBackward();
 		  break;
+		case 0x39:
+			running_state = 1;
+			ending = 0;
+			goLeftFull();
+		  break;
+		case 0x3a:
+			running_state = 1;
+			ending = 0;
+			goRightFull();
+		  break;
 		case 0x98:
 			ending = 0;
 			break;
@@ -348,6 +358,6 @@ int main()
 	osThreadNew(playMusic, NULL, NULL); // Thread to play music
 	osThreadNew(ledFront, NULL, NULL); // Thread to run front LEDs
 	osThreadNew(ledBack, NULL, NULL); // Thread to run back LEDs
-  	osKernelStart();
+  osKernelStart();
 	while(1);
 }
